@@ -53,4 +53,4 @@ class EnvironmentConfig {
     }
 }
 
-export default EnvironmentConfig
+export default EnvironmentConfig.getInstance()
