@@ -1,11 +1,27 @@
 import dotenv from 'dotenv';
 import path from 'path';
+import { TypeOf, z } from 'zod'
+import Logger from './logger.config';
+
+const logger = Logger.getChildLogger('EnvironmentCOnfig');
+
+const environmentSchema = z.object({
+    PORT: z.string().default("3000").transform((value) => Number(value)),
+    MONGODB_URI: z.string(),
+    NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+    LOG_LEVEL: z.enum(['error', 'warn', 'info', 'verbose', 'debug', 'silly']).default('info'),
+    API_PREFIX: z.string().default('/api/v1')
+
+})
 
 class EnvironmentConfig {
     private static instance: EnvironmentConfig;
+    private config: z.infer<typeof environmentSchema>
 
     private constructor() {
         this.loadEnvirnomentVariables()
+        this.config = this.validateConfig()
+
     }
 
     public static getInstance(): EnvironmentConfig {
@@ -22,34 +38,29 @@ class EnvironmentConfig {
         dotenv.config({
             path: envPath
         })
+
+        logger.info(`Loaded environment variables from ${envFile}`)
     }
 
-    public get(key: string, defaultValue?: string): string {
-        const value = process.env[key] || defaultValue;
-
-        if (value === undefined) {
-            throw new Error(`Environment variable ${key} is not set`)
+    private validateConfig() {
+        try {
+            return environmentSchema.parse(process.env)
+        } catch (error) {
+            logger.error('Invalid enironment configuration', error);
+            process.exit(1)
         }
-
-        return value
     }
 
-
-    public getNumber(key: string, defaultValue?: number): number {
-        const value = this.get(key);
-        const parsedValue = Number(value);
-
-        if (isNaN(parsedValue)) {
-            if (defaultValue !== undefined) return defaultValue;
-            throw new Error(`Environment variable ${key} is not a number`)
-        }
-
-        return parsedValue
+    public get(key: keyof z.infer<typeof environmentSchema>) {
+        return this.config[key]
     }
 
-    public getBoolean(key: string, defaultValue = false): boolean {
-        const value = this.get(key);
-        return value.toLowerCase() === 'true' || value === '1' || (defaultValue && !value);
+    public isDevelopment(): boolean {
+        return this.config.NODE_ENV === 'development'
+    }
+
+    public isProduction(): boolean {
+        return this.config.NODE_ENV === 'production'
     }
 }
 
